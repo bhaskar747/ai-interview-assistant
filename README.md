@@ -12,7 +12,7 @@
 
 **[🌟 Try the Live Demo](https://ai-interview-assistant-gray.vercel.app/)**
 
-![AI Interview Assistant Screenshot](https://via.placeholder.com/800x450/667eea/ffffff?text=AI+Interview+Assistant)
+
 
 </div>
 
