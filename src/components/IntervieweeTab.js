@@ -1,15 +1,9 @@
-
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Card, Upload, Button, Form, Input, message, Space } from 'antd';
 import { InboxOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  setCurrentCandidate,
-  addCandidate,
-  setInterviewState
-} from '../store/interviewSlice';
+import { setCurrentCandidate, addCandidate, setInterviewState } from '../store/interviewSlice';
 import { parseResume } from '../utils/resumeParser';
 import Chat from './Chat';
 
@@ -21,101 +15,101 @@ const IntervieweeTab = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
+  const fileInputRef = useRef(null);
 
-  // Handle file upload and parse resume via serverless API
-  const handleFileUpload = async file => {
+  const handleFileUpload = async (file) => {
     setLoading(true);
     try {
-      // parseResume calls /api/parseResume under the hood
-      const parsed = await parseResume(file);
+      const parsedData = await parseResume(file);
       const candidateData = {
         id: uuidv4(),
-        name: parsed.name || '',
-        email: parsed.email || '',
-        phone: parsed.phone || '',
-        resumeText: parsed.text || '',
+        name: parsedData.name || '',
+        email: parsedData.email || '',
+        phone: parsedData.phone || '',
+        resumeText: parsedData.text || '',
         timestamp: new Date().toISOString(),
         status: 'pending'
       };
 
       setUploadedFile(file);
       dispatch(setCurrentCandidate(candidateData));
-
-      // Pre-fill the form fields
+      
       form.setFieldsValue({
         name: candidateData.name,
         email: candidateData.email,
         phone: candidateData.phone
       });
 
-      message.success('Resume parsed successfully!');
+      message.success('Resume uploaded successfully!');
     } catch (error) {
-      console.error('Error parsing resume:', error);
-      message.error('Failed to parse resume. Please try again.');
+      message.error('Error parsing resume. Please try again.');
     }
     setLoading(false);
-    return false; // Prevent default upload
-  };
-
-  // Validate and intercept upload
-  const beforeUpload = file => {
-    const isPdf = file.type === 'application/pdf';
-    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    if (!isPdf && !isDocx) {
-      message.error('Only PDF or DOCX files are allowed.');
-      return false;
-    }
-    if (file.size / 1024 / 1024 > 10) {
-      message.error('File must be smaller than 10MB.');
-      return false;
-    }
-    handleFileUpload(file);
     return false;
   };
 
-  // Submit profile form and start interview
-  const handleFormSubmit = values => {
-    const updated = {
+  const handleFormSubmit = (values) => {
+    const candidateData = {
       ...currentCandidate,
       ...values,
       status: 'ready'
     };
-    dispatch(setCurrentCandidate(updated));
-    dispatch(addCandidate(updated));
+    
+    dispatch(setCurrentCandidate(candidateData));
+    dispatch(addCandidate(candidateData));
     dispatch(setInterviewState('ready'));
-    message.success('Profile completed! Starting interview...');
+    message.success('Profile completed! Ready to start interview.');
   };
 
-  // Render Chat once interview starts or completes
-  if (['ready', 'in-progress', 'completed'].includes(interviewState)) {
+  const beforeUpload = (file) => {
+    const isValidType = file.type === 'application/pdf' || 
+                       file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    
+    if (!isValidType) {
+      message.error('Please upload PDF or DOCX files only!');
+      return false;
+    }
+
+    const isLt10M = file.size / 1024 / 1024 < 10;
+    if (!isLt10M) {
+      message.error('File must be smaller than 10MB!');
+      return false;
+    }
+
+    handleFileUpload(file);
+    return false;
+  };
+
+  if (interviewState === 'ready' || interviewState === 'in-progress' || interviewState === 'completed') {
     return <Chat />;
   }
 
   return (
     <div className="interviewee-container">
-      <Card
+      <Card 
         title={
           <Space>
             <UserOutlined />
-            Welcome to Your AI Interview
+            Welcome to Your Interview
           </Space>
         }
         className="upload-card"
       >
-        {/* Resume Uploader */}
         <div className="upload-section">
           <Dragger
             name="resume"
+            multiple={false}
             beforeUpload={beforeUpload}
             showUploadList={false}
             className="resume-uploader"
-            disabled={loading}
           >
             <p className="ant-upload-drag-icon">
               <InboxOutlined />
             </p>
             <p className="ant-upload-text">Click or drag your resume here</p>
-            <p className="ant-upload-hint">PDF or DOCX only, max 10MB</p>
+            <p className="ant-upload-hint">
+              Support PDF and DOCX formats only (Max 10MB)
+            </p>
           </Dragger>
 
           {uploadedFile && (
@@ -125,10 +119,9 @@ const IntervieweeTab = () => {
           )}
         </div>
 
-        {/* Profile Form */}
         {currentCandidate && (
-          <Card
-            title="Complete Your Profile"
+          <Card 
+            title="Complete Your Profile" 
             className="profile-form-card"
             loading={loading}
           >
@@ -143,18 +136,24 @@ const IntervieweeTab = () => {
                 label="Full Name"
                 rules={[{ required: true, message: 'Please enter your name' }]}
               >
-                <Input placeholder="Your full name" size="large" />
+                <Input 
+                  placeholder="Enter your full name" 
+                  size="large"
+                />
               </Form.Item>
 
               <Form.Item
                 name="email"
-                label="Email Address"
+                label="Email"
                 rules={[
                   { required: true, message: 'Please enter your email' },
-                  { type: 'email', message: 'Enter a valid email' }
+                  { type: 'email', message: 'Please enter a valid email' }
                 ]}
               >
-                <Input placeholder="Your email" size="large" />
+                <Input 
+                  placeholder="Enter your email address" 
+                  size="large"
+                />
               </Form.Item>
 
               <Form.Item
@@ -162,20 +161,21 @@ const IntervieweeTab = () => {
                 label="Phone Number"
                 rules={[{ required: true, message: 'Please enter your phone number' }]}
               >
-                <Input placeholder="Your phone number" size="large" />
+                <Input 
+                  placeholder="Enter your phone number" 
+                  size="large"
+                />
               </Form.Item>
 
-              <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  size="large"
-                  block
-                  icon={<RobotOutlined />}
-                >
-                  Start AI Interview
-                </Button>
-              </Form.Item>
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                size="large" 
+                block
+                icon={<RobotOutlined />}
+              >
+                Start AI Interview
+              </Button>
             </Form>
           </Card>
         )}
