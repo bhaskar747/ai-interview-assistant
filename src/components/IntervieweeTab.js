@@ -1,9 +1,15 @@
+
+
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Card, Upload, Button, Form, Input, message, Space } from 'antd';
 import { InboxOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
-import { setCurrentCandidate, addCandidate, setInterviewState } from '../store/interviewSlice';
+import {
+  setCurrentCandidate,
+  addCandidate,
+  setInterviewState
+} from '../store/interviewSlice';
 import { parseResume } from '../utils/resumeParser';
 import Chat from './Chat';
 
@@ -16,90 +22,100 @@ const IntervieweeTab = () => {
   const [loading, setLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
 
-  const handleFileUpload = async (file) => {
+  // Handle file upload and parse resume via serverless API
+  const handleFileUpload = async file => {
     setLoading(true);
     try {
-      const parsedData = await parseResume(file);
+      // parseResume calls /api/parseResume under the hood
+      const parsed = await parseResume(file);
       const candidateData = {
         id: uuidv4(),
-        name: parsedData.name || '',
-        email: parsedData.email || '',
-        phone: parsedData.phone || '',
-        resumeText: parsedData.text || '',
+        name: parsed.name || '',
+        email: parsed.email || '',
+        phone: parsed.phone || '',
+        resumeText: parsed.text || '',
         timestamp: new Date().toISOString(),
         status: 'pending'
       };
 
       setUploadedFile(file);
       dispatch(setCurrentCandidate(candidateData));
-      
+
+      // Pre-fill the form fields
       form.setFieldsValue({
         name: candidateData.name,
         email: candidateData.email,
         phone: candidateData.phone
       });
 
-      message.success('Resume uploaded successfully!');
+      message.success('Resume parsed successfully!');
     } catch (error) {
-      message.error('Error parsing resume. Please try again.');
+      console.error('Error parsing resume:', error);
+      message.error('Failed to parse resume. Please try again.');
     }
     setLoading(false);
-    return false;
+    return false; // Prevent default upload
   };
 
-  const handleFormSubmit = (values) => {
-    const candidateData = {
-      ...currentCandidate,
-      ...values,
-      status: 'ready'
-    };
-    
-    dispatch(setCurrentCandidate(candidateData));
-    dispatch(addCandidate(candidateData));
-    dispatch(setInterviewState('ready'));
-    message.success('Profile completed! Ready to start interview.');
-  };
-
-  const beforeUpload = (file) => {
-    const isValidType = file.type === 'application/pdf' || 
-                       file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    
-    if (!isValidType) {
-      message.error('Please upload PDF or DOCX files only!');
+  // Validate and intercept upload
+  const beforeUpload = file => {
+    const isPdf = file.type === 'application/pdf';
+    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (!isPdf && !isDocx) {
+      message.error('Only PDF or DOCX files are allowed.');
       return false;
     }
-
-    const isLt10M = file.size / 1024 / 1024 < 10;
-    if (!isLt10M) {
-      message.error('File must be smaller than 10MB!');
+    if (file.size / 1024 / 1024 > 10) {
+      message.error('File must be smaller than 10MB.');
       return false;
     }
-
     handleFileUpload(file);
     return false;
   };
 
-  if (interviewState === 'ready' || interviewState === 'in-progress' || interviewState === 'completed') {
+  // Submit profile form and start interview
+  const handleFormSubmit = values => {
+    const updated = {
+      ...currentCandidate,
+      ...values,
+      status: 'ready'
+    };
+    dispatch(setCurrentCandidate(updated));
+    dispatch(addCandidate(updated));
+    dispatch(setInterviewState('ready'));
+    message.success('Profile completed! Starting interview...');
+  };
+
+  // Render Chat once interview starts or completes
+  if (['ready', 'in-progress', 'completed'].includes(interviewState)) {
     return <Chat />;
   }
 
   return (
     <div className="interviewee-container">
-      <Card 
-        title={<Space><UserOutlined />Welcome to Your Interview</Space>}
+      <Card
+        title={
+          <Space>
+            <UserOutlined />
+            Welcome to Your AI Interview
+          </Space>
+        }
         className="upload-card"
       >
+        {/* Resume Uploader */}
         <div className="upload-section">
           <Dragger
             name="resume"
-            multiple={false}
             beforeUpload={beforeUpload}
             showUploadList={false}
             className="resume-uploader"
+            disabled={loading}
           >
-            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p className="ant-upload-drag-icon">
+              <InboxOutlined />
+            </p>
             <p className="ant-upload-text">Click or drag your resume here</p>
-            <p className="ant-upload-hint">Support PDF and DOCX formats only (Max 10MB)</p>
+            <p className="ant-upload-hint">PDF or DOCX only, max 10MB</p>
           </Dragger>
 
           {uploadedFile && (
@@ -109,21 +125,57 @@ const IntervieweeTab = () => {
           )}
         </div>
 
+        {/* Profile Form */}
         {currentCandidate && (
-          <Card title="Complete Your Profile" className="profile-form-card" loading={loading}>
-            <Form form={form} layout="vertical" onFinish={handleFormSubmit} requiredMark={false}>
-              <Form.Item name="name" label="Full Name" rules={[{ required: true, message: 'Please enter your name' }]}>
-                <Input placeholder="Enter your full name" size="large" />
+          <Card
+            title="Complete Your Profile"
+            className="profile-form-card"
+            loading={loading}
+          >
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={handleFormSubmit}
+              requiredMark={false}
+            >
+              <Form.Item
+                name="name"
+                label="Full Name"
+                rules={[{ required: true, message: 'Please enter your name' }]}
+              >
+                <Input placeholder="Your full name" size="large" />
               </Form.Item>
-              <Form.Item name="email" label="Email" rules={[{ required: true, message: 'Please enter your email' }, { type: 'email', message: 'Please enter a valid email' }]}>
-                <Input placeholder="Enter your email address" size="large" />
+
+              <Form.Item
+                name="email"
+                label="Email Address"
+                rules={[
+                  { required: true, message: 'Please enter your email' },
+                  { type: 'email', message: 'Enter a valid email' }
+                ]}
+              >
+                <Input placeholder="Your email" size="large" />
               </Form.Item>
-              <Form.Item name="phone" label="Phone Number" rules={[{ required: true, message: 'Please enter your phone number' }]}>
-                <Input placeholder="Enter your phone number" size="large" />
+
+              <Form.Item
+                name="phone"
+                label="Phone Number"
+                rules={[{ required: true, message: 'Please enter your phone number' }]}
+              >
+                <Input placeholder="Your phone number" size="large" />
               </Form.Item>
-              <Button type="primary" htmlType="submit" size="large" block icon={<RobotOutlined />}>
-                Start AI Interview
-              </Button>
+
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  size="large"
+                  block
+                  icon={<RobotOutlined />}
+                >
+                  Start AI Interview
+                </Button>
+              </Form.Item>
             </Form>
           </Card>
         )}
